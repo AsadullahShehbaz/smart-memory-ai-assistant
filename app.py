@@ -231,9 +231,7 @@ if "user_email" in st.session_state:
         mem_client.clear(user_id=user_id)
         st.sidebar.success("Memory cleared successfully!")
 
-    if st.sidebar.button("📁 Download Memory"):
-        mem_client.download(user_id=user_id)
-        st.sidebar.success("Memory downloaded successfully!")
+
 
 
 
