@@ -38,7 +38,7 @@ cursor = conn.cursor(dictionary=True)
 
 # Create users table if not exists
 cursor.execute("""
-CREATE TABLE IF NOT EXISTS users_memory_agent (
+CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
@@ -235,3 +235,4 @@ if "user_email" in st.session_state:
     if st.sidebar.button("📁 Download Memory"):
         mem_client.download(user_id=user_id)
         st.sidebar.success("Memory downloaded successfully!")
+
