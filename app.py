@@ -227,9 +227,8 @@ if "user_email" in st.session_state:
         st.session_state.chat_history = []
         st.sidebar.success("Chat cleared.")
 
-    if st.sidebar.button("🗑️ Clear Memory"):
-        mem_client.clear(user_id=user_id)
-        st.sidebar.success("Memory cleared successfully!")
+
+
 
 
 
