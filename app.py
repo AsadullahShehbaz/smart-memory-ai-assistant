@@ -85,7 +85,7 @@ def register_user(email, password):
         conn.commit()
         return True
     except mysql.connector.Error as err:
-        print("Error:", err)
+        st.sidebar.error(f"MySQL Error: {err}")
         return False
 
 
@@ -235,4 +235,5 @@ if "user_email" in st.session_state:
     if st.sidebar.button("📁 Download Memory"):
         mem_client.download(user_id=user_id)
         st.sidebar.success("Memory downloaded successfully!")
+
 
