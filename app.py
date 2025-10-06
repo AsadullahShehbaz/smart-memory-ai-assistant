@@ -35,12 +35,6 @@ conn = mysql.connector.connect(
     database=st.secrets["MYSQL_DB"]
 )
 cursor = conn.cursor(dictionary=True)
-try:
-    cursor.execute("DROP TABLE IF EXISTS users;")
-    conn.commit()
-    st.sidebar.success("Old 'users' table dropped successfully.")
-except mysql.connector.Error as err:
-    st.sidebar.error(f"Error dropping table: {err}")
 # Create users table if not exists
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS users (
@@ -240,6 +234,7 @@ if "user_email" in st.session_state:
     if st.sidebar.button("📁 Download Memory"):
         mem_client.download(user_id=user_id)
         st.sidebar.success("Memory downloaded successfully!")
+
 
 
 
