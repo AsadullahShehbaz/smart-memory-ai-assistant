@@ -336,13 +336,14 @@ if "user_email" in st.session_state:
     </script>
     ''', unsafe_allow_html=True)
 
-    if (user_input and st.session_state.get("last_input") != user_input) or send_clicked:
+    if (user_input.strip() and st.session_state.get("last_input") != user_input.strip()) or send_clicked:
         if user_input.strip():
-            st.session_state.last_input = user_input
-            st.session_state.user_input = user_input.strip()
+            st.session_state.last_input = user_input.strip()
+            st.session_state.user_input_area = user_input.strip()  # update text area key
             submit_message()
 
     # Sidebar utilities
     if st.sidebar.button("🧹 Clear Chat"):
         st.session_state.chat_history = []
         st.sidebar.success("Chat cleared.")
+
