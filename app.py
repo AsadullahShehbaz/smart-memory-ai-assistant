@@ -184,7 +184,7 @@ if "user_email" not in st.session_state:
             if user_email:
                 st.session_state.user_email = user_email
                 st.sidebar.success(f"🎉 Welcome, {user_email}!")
-                st.experimental_rerun()
+                st.rerun()
             else:
                 st.sidebar.error("Invalid email or password")
 
@@ -195,7 +195,7 @@ else:
         for k in ["user_email", "chat_history"]:
             st.session_state.pop(k, None)
         st.sidebar.info("Logged out successfully.")
-        st.experimental_rerun()
+        st.rerun()
 
 # -----------------------------
 # Chat Section
@@ -294,3 +294,4 @@ if "user_email" in st.session_state:
                 st.sidebar.error(f"Error clearing memory: {e}")
         else:
             st.sidebar.info("Memory not initialized.")
+
