@@ -1,8 +1,11 @@
 # app.py
 # 🚀 Smart Memory AI Agent
 # Streamlit + Gemini + Mem0 + Qdrant + MySQL Auth + Persistent Memory
-# Clean, working version (2025 update)
+# Fixed version — uses genai.Client(...) and safe session handling
 
+import os
+import json
+import warnings
 import streamlit as st
 from dotenv import load_dotenv
 from mem0 import Memory
@@ -10,9 +13,6 @@ from google import genai
 from qdrant_client import QdrantClient
 import mysql.connector
 import bcrypt
-import os
-import json
-import warnings
 
 # -----------------------------
 # Basic Config
@@ -20,13 +20,14 @@ import warnings
 warnings.filterwarnings("ignore", category=ImportWarning)
 load_dotenv()
 
-# ✅ Load Secrets Safely
+# -----------------------------
+# Helpers for secrets
+# -----------------------------
 def get_secret(key, default=None):
-    return (
-        st.secrets[key]
-        if key in st.secrets
-        else os.getenv(key, default)
-    )
+    # Prefer Streamlit secrets, fall back to environment
+    if key in st.secrets:
+        return st.secrets[key]
+    return os.getenv(key, default)
 
 GEMINI_API_KEY = get_secret("GEMINI_API_KEY")
 QDRANT_API_KEY = get_secret("QDRANT_API_KEY")
@@ -41,7 +42,9 @@ MYSQL_USER = get_secret("MYSQL_USER", "root")
 MYSQL_PASSWORD = get_secret("MYSQL_PASSWORD", "")
 MYSQL_DB = get_secret("MYSQL_DB", "smart_ai_db")
 
-# ✅ MySQL Setup
+# -----------------------------
+# MySQL Setup (safe)
+# -----------------------------
 try:
     conn = mysql.connector.connect(
         host=MYSQL_HOST,
@@ -64,27 +67,40 @@ except Exception as e:
     st.error(f"MySQL connection error: {e}")
     st.stop()
 
-# ✅ Qdrant Client
-qdrant_client = QdrantClient(
-    url=QDRANT_URL,
-    api_key=QDRANT_API_KEY,
-    timeout=30.0,
-    prefer_grpc=False
-)
-
-# ✅ Gemini Config
-if not GEMINI_API_KEY:
-    st.error("❌ GOOGLE_API_KEY not found in secrets or .env")
+# -----------------------------
+# Qdrant Client
+# -----------------------------
+try:
+    qdrant_client = QdrantClient(
+        url=QDRANT_URL,
+        api_key=QDRANT_API_KEY,
+        timeout=30.0,
+        prefer_grpc=False
+    )
+except Exception as e:
+    st.error(f"Qdrant client init error: {e}")
     st.stop()
 
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel("gemini-1.5-flash")
+# -----------------------------
+# Gemini (Google GenAI) Client
+# -----------------------------
+if not GEMINI_API_KEY:
+    st.error("Missing GEMINI_API_KEY (set in Streamlit secrets or .env).")
+    st.stop()
 
-# ✅ Mem0 Config
+try:
+    genai_client = genai.Client(api_key=GEMINI_API_KEY)
+except Exception as e:
+    st.error(f"Error initializing genai client: {e}")
+    st.stop()
+
+# -----------------------------
+# Mem0 Config
+# -----------------------------
 config = {
     "version": "v1.1",
     "embedder": {"provider": "gemini", "config": {"model": "models/text-embedding-004"}},
-    "llm": {"provider": "gemini", "config": {"api_key": GEMINI_API_KEY, "model": "models/gemini-1.5-flash"}},
+    "llm": {"provider": "gemini", "config": {"api_key": GEMINI_API_KEY, "model": "models/gemini-2.5-flash"}},
     "graph_store": {
         "provider": "neo4j",
         "config": {
@@ -103,10 +119,14 @@ config = {
         },
     },
 }
-mem_client = Memory.from_config(config)
+try:
+    mem_client = Memory.from_config(config)
+except Exception as e:
+    st.warning(f"Warning: Mem0 initialization failed (memory features may not work): {e}")
+    mem_client = None
 
 # -----------------------------
-# Auth Functions
+# Auth helper functions
 # -----------------------------
 def register_user(email, password):
     try:
@@ -121,7 +141,6 @@ def register_user(email, password):
         st.sidebar.error(f"MySQL Error: {err}")
         return False
 
-
 def authenticate_user(email, password):
     cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
     user = cursor.fetchone()
@@ -130,13 +149,10 @@ def authenticate_user(email, password):
     return None
 
 # -----------------------------
-# Streamlit Layout
+# Streamlit UI config
 # -----------------------------
 st.set_page_config(page_title="Smart Memory AI Agent", page_icon="🧠", layout="wide")
 
-# -----------------------------
-# Header
-# -----------------------------
 st.title("🧠 Smart Memory AI Agent")
 st.markdown("""
 **Powered by Gemini + Mem0 + Qdrant + MySQL + Neo4j**  
@@ -144,7 +160,7 @@ st.markdown("""
 """)
 
 # -----------------------------
-# Sidebar Auth System
+# Sidebar - Authentication
 # -----------------------------
 st.sidebar.markdown("### 🔐 Authentication")
 
@@ -156,7 +172,8 @@ if "user_email" not in st.session_state:
         password = st.sidebar.text_input("Password", type="password", key="reg_pass")
         if st.sidebar.button("Register"):
             if email and password:
-                if register_user(email, password):
+                ok = register_user(email, password)
+                if ok:
                     st.sidebar.success("✅ Registered successfully! Please login.")
                 else:
                     st.sidebar.error("❌ Email already exists or DB error.")
@@ -171,10 +188,9 @@ if "user_email" not in st.session_state:
             if user_email:
                 st.session_state.user_email = user_email
                 st.sidebar.success(f"🎉 Welcome back, {user_email}!")
-                st.rerun()
+                st.experimental_rerun()
             else:
                 st.sidebar.error("Invalid email or password")
-
 else:
     st.sidebar.markdown(f"👋 **Logged in as:** `{st.session_state.user_email}`")
     st.sidebar.success("✅ Session Active")
@@ -182,10 +198,10 @@ else:
         for key in ["user_email", "chat_history"]:
             st.session_state.pop(key, None)
         st.sidebar.info("Logged out successfully.")
-        st.rerun()
+        st.experimental_rerun()
 
 # -----------------------------
-# Chat Section (After Login)
+# After-login: Chat UI
 # -----------------------------
 if "user_email" in st.session_state:
     user_id = st.session_state.user_email
@@ -199,66 +215,57 @@ if "user_email" in st.session_state:
         st.markdown(f"**🤖 AI:** {chat['ai']}")
         st.markdown("---")
 
-    # -----------------------------
-    # Chat Handler Function
-    # -----------------------------
-    def submit_message():
-        user_query = st.session_state.user_input.strip()
+    # Use a distinct key for the text input to avoid past widget-key issues
+    user_input = st.text_input("✏️ Your message:", key="message_input")
+
+    def submit_message(user_query: str):
+        user_query = user_query.strip()
         if not user_query:
             return
 
-        # 🔍 Retrieve relevant memories
-        search_memory = mem_client.search(query=user_query, user_id=user_id)
-        memories = [
-            f"Memory: {mem.get('memory', '')}"
-            for mem in search_memory.get('results', [])
-        ]
-        context_text = "\n".join(memories)
-
-        # 🧠 Combine prompt
-        prompt = f"""
-        You are a helpful AI assistant with memory.
-        Previous context:
-        {context_text}
-        User says: {user_query}
-        """
-
-        # 🚀 Generate Gemini response
+        # Get memories (if mem_client available)
+        context_text = ""
         try:
-            response = model.generate_content(prompt)
-            ai_response = response.text if hasattr(response, "text") else "I generated a reply but couldn't extract text."
+            if mem_client:
+                search_memory = mem_client.search(query=user_query, user_id=user_id)
+                results = search_memory.get("results", []) if isinstance(search_memory, dict) else search_memory.get('results', [])
+                memories = [f"Memory: {m.get('memory', '')}" for m in results]
+                context_text = "\n".join(memories)
         except Exception as e:
-            ai_response = f"⚠️ Gemini Error: {e}"
+            # non-fatal: continue without memory
+            context_text = ""
 
-        # 💾 Store in memory
-        mem_client.add(user_id=user_id, messages=[
-            {"role": "user", "content": user_query},
-            {"role": "assistant", "content": ai_response},
-        ])
+        system_prompt = f"""
+You are a helpful AI Assistant.
+User context (from memory):
+{context_text}
+User message: {user_query}
+"""
 
-        # 🧠 Update chat
+        # Call Gemini via genai_client
+        try:
+            response = genai_client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=system_prompt
+            )
+            # response.text is expected, otherwise try to pull from .output or repr
+            ai_response = getattr(response, "text", None) or (response.output if hasattr(response, "output") else str(response))
+        except Exception as e:
+            ai_response = f"⚠️ Error generating response: {e}"
+
+        # Store to mem0 if available
+        try:
+            if mem_client:
+                mem_client.add(user_id=user_id, messages=[
+                    {"role": "user", "content": user_query},
+                    {"role": "assistant", "content": ai_response},
+                ])
+        except Exception:
+            pass  # non-fatal
+
+        # Append to chat history (safe)
         st.session_state.chat_history.append({"user": user_query, "ai": ai_response})
-        st.session_state.user_input = ""
 
-    # -----------------------------
-    # Input Box + Button
-    # -----------------------------
-    user_input = st.text_input("✏️ Your message:", key="user_input")
-
-    if st.button("Send ✈️"):
-        if user_input.strip():
-            submit_message()
-            st.rerun()
-        else:
-            st.warning("Please enter a message before sending.")
-
-    # -----------------------------
-    # Sidebar Utilities
-    # -----------------------------
-    if st.sidebar.button("🧹 Clear Chat"):
-        st.session_state.chat_history = []
-        st.sidebar.success("Chat cleared.")
-
-    if st.sidebar.button("🧠 Reset Memory"):
-        mem_client.delete_all(user_id=user_id)
-        st.sidebar.warning("Memory cleared for this user.")
+        # Clear the text input value safely by setting same widget key
+        try:
+            st.session
