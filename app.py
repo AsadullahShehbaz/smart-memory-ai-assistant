@@ -1,7 +1,7 @@
 # app.py
 # 🚀 Smart Memory AI Agent
 # Streamlit + Gemini + Mem0 + Qdrant + MySQL Auth + Persistent Memory
-# Beautiful ChatGPT-style interface with bottom input and chat bubbles
+# ChatGPT-style interface with bottom input box + Send ✈️ button
 
 import streamlit as st
 from dotenv import load_dotenv
@@ -25,6 +25,9 @@ load_dotenv()
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 QDRANT_API_KEY = st.secrets["QDRANT_API_KEY"]
 QDRANT_URL = st.secrets["QDRANT_URL"]
+NEO4J_URI = st.secrets["NEO4J_URI"]
+NEO4J_USERNAME = st.secrets["NEO4J_USERNAME"]
+NEO4J_PASSWORD = st.secrets["NEO4J_PASSWORD"]
 
 # MySQL Connection
 conn = mysql.connector.connect(
@@ -35,7 +38,6 @@ conn = mysql.connector.connect(
     database=st.secrets["MYSQL_DB"]
 )
 cursor = conn.cursor(dictionary=True)
-# Create users table if not exists
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -62,14 +64,22 @@ config = {
     "version": "v1.1",
     "embedder": {"provider": "gemini", "config": {"model": "models/text-embedding-004"}},
     "llm": {"provider": "gemini", "config": {"api_key": GEMINI_API_KEY, "model": "models/gemini-2.5-flash"}},
+    "graph_store": {
+        "provider": "neo4j",
+        "config": {
+            "url": NEO4J_URI,
+            "username": NEO4J_USERNAME,
+            "password": NEO4J_PASSWORD,
+        },
+    },
     "vector_store": {
         "provider": "qdrant",
         "config": {
             "url": QDRANT_URL,
             "api_key": QDRANT_API_KEY,
             "collection_name": "memory_agent",
-            "embedding_model_dims": 768
-        }
+            "embedding_model_dims": 768,
+        },
     },
 }
 mem_client = Memory.from_config(config)
@@ -80,7 +90,10 @@ mem_client = Memory.from_config(config)
 def register_user(email, password):
     try:
         hashed_password = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
-        cursor.execute("INSERT INTO users (email, password_hash) VALUES (%s, %s)", (email, hashed_password.decode()))
+        cursor.execute(
+            "INSERT INTO users (email, password_hash) VALUES (%s, %s)",
+            (email, hashed_password.decode()),
+        )
         conn.commit()
         return True
     except mysql.connector.Error as err:
@@ -92,38 +105,128 @@ def authenticate_user(email, password):
     cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
     user = cursor.fetchone()
     if user and bcrypt.checkpw(password.encode(), user["password_hash"].encode()):
-        return user["email"]  # ✅ use email as unique identifier
+        return user["email"]
     return None
+
 
 # -----------------------------
 # Streamlit Layout
 # -----------------------------
 st.set_page_config(page_title="Smart Memory AI Agent", page_icon="🤖", layout="wide")
 
-# Custom CSS
-st.markdown(
-    """
-    <style>
-    body, .stApp { background-color: #0F111A; color: #E0E0E0; }
-    footer {visibility: hidden;}
-    .chat-container { max-height: 70vh; overflow-y: auto; padding: 10px; }
-    .user-msg { background: linear-gradient(135deg,#3B82F6,#2563EB); color:white; padding:12px; border-radius:15px; margin:5px 0; max-width:70%; float:right; clear:both;}
-    .ai-msg { background: linear-gradient(135deg,#FBBF24,#F59E0B); color:black; padding:12px; border-radius:15px; margin:5px 0; max-width:70%; float:left; clear:both;}
-    .input-container { position: fixed; bottom: 10px; width: 90%; left: 5%; display: flex; background-color: #1F2937; padding:10px; border-radius:10px; }
-    .stTextInput>div>div>input { background-color:#374151; color:#E0E0E0; border-radius:10px; padding:10px; border:none; width:100%; }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+# -----------------------------
+# Custom ChatGPT-style CSS
+# -----------------------------
+st.markdown("""
+<style>
+body, .stApp {
+    background-color: #0F111A;
+    color: #E0E0E0;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+}
+footer {visibility: hidden;}
 
+/* Scrollable chat container */
+.chat-container {
+    max-height: calc(100vh - 160px);
+    overflow-y: auto;
+    padding: 20px 10px 80px 10px;
+}
+
+/* Chat bubbles */
+.user-msg {
+    background: linear-gradient(135deg,#3B82F6,#2563EB);
+    color:white;
+    padding:12px 14px;
+    border-radius:15px;
+    margin:5px 0;
+    max-width:70%;
+    float:right;
+    clear:both;
+    word-wrap:break-word;
+}
+.ai-msg {
+    background: linear-gradient(135deg,#FBBF24,#F59E0B);
+    color:black;
+    padding:12px 14px;
+    border-radius:15px;
+    margin:5px 0;
+    max-width:70%;
+    float:left;
+    clear:both;
+    word-wrap:break-word;
+}
+
+/* Bottom input bar */
+.input-container {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background-color: #1F2937;
+    padding: 12px 18px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    box-shadow: 0 -3px 10px rgba(0,0,0,0.3);
+    gap: 10px;
+}
+
+/* Textarea */
+textarea {
+    background-color:#374151 !important;
+    color:#E0E0E0 !important;
+    border-radius:10px !important;
+    border:none !important;
+    width:100% !important;
+    resize:none !important;
+    font-size:16px !important;
+    line-height:1.5 !important;
+    min-height:40px !important;
+    max-height:120px !important;
+    overflow-y:auto !important;
+    padding:10px 14px !important;
+}
+.stTextArea>div>div>textarea:focus {
+    outline:none !important;
+    border:none !important;
+    box-shadow:none !important;
+}
+
+/* Send button */
+.send-btn {
+    background: linear-gradient(135deg,#3B82F6,#2563EB);
+    color:white;
+    border:none;
+    border-radius:10px;
+    padding:10px 16px;
+    font-size:18px;
+    cursor:pointer;
+    transition: all 0.2s ease-in-out;
+}
+.send-btn:hover {
+    background: linear-gradient(135deg,#2563EB,#1D4ED8);
+    transform: translateY(-1px);
+}
+
+/* Responsive tweaks */
+@media (max-width: 768px) {
+    .user-msg, .ai-msg {max-width: 90%;}
+    .input-container {padding: 10px;}
+}
+</style>
+""", unsafe_allow_html=True)
+
+# -----------------------------
+# Header
+# -----------------------------
 st.title("🧠 Smart Memory AI Agent")
-st.markdown(
-    """
-    **Powered by Gemini + Mem0 + Qdrant + MySQL**  
-    💬 Personalized Memory | ⚡ Persistent AI | ☁️ Cloud-Ready
-    """,
-    unsafe_allow_html=True
-)
+st.markdown("""
+**Powered by Gemini + Mem0 + Qdrant DB + MySQL + Neo4j Graph DB**  
+💬 Personalized Memory | ⚡ Persistent AI | ☁️ Cloud-Ready
+""")
 
 # -----------------------------
 # Sidebar Auth System
@@ -170,12 +273,12 @@ else:
 # Chat Section (After Login)
 # -----------------------------
 if "user_email" in st.session_state:
-    user_id = st.session_state.user_email  # ✅ use email as identifier
+    user_id = st.session_state.user_email
 
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
 
-    # Chat Display
+    # Display chat history
     chat_container = st.container()
     with chat_container:
         st.markdown('<div class="chat-container">', unsafe_allow_html=True)
@@ -184,55 +287,62 @@ if "user_email" in st.session_state:
             st.markdown(f'<div class="ai-msg"><b>AI:</b> {chat["ai"]}</div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # Message Input
+    # Message handler
     def submit_message():
         user_query = st.session_state.user_input.strip()
         if not user_query:
             return
-
-        # Retrieve memory
         search_memory = mem_client.search(query=user_query, user_id=user_id)
         memories = [f"Memory: {mem.get('memory')}" for mem in search_memory.get('results', [])]
-
         system_prompt = f"""
         You are a helpful AI Assistant.
         User context (from previous chats):
         {json.dumps(memories, indent=2)}
         User message: {user_query}
         """
-
-        response = genai_client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=system_prompt
-        )
+        response = genai_client.models.generate_content(model="gemini-2.5-flash", contents=system_prompt)
         ai_response = response.text
 
-        # Store in memory
         mem_client.add(user_id=user_id, messages=[
             {"role": "user", "content": user_query},
-            {"role": "assistant", "content": ai_response}
+            {"role": "assistant", "content": ai_response},
         ])
 
-        # Update chat history
         st.session_state.chat_history.append({"user": user_query, "ai": ai_response})
         st.session_state.user_input = ""
 
-    # Bottom Input Box
+    # -----------------------------
+    # Bottom Input + Send ✈️ Button
+    # -----------------------------
     st.markdown('<div class="input-container">', unsafe_allow_html=True)
-    st.text_input("", key="user_input", placeholder="Type your message and press Enter...", on_change=submit_message)
-    st.markdown('</div>', unsafe_allow_html=True)
+    col1, col2 = st.columns([9, 1])
 
-    # Sidebar Utilities
+    with col1:
+        user_input = st.text_area(
+            "",
+            key="user_input",
+            placeholder="Type your message... (Shift+Enter for new line)",
+            height=40,
+        )
+
+    with col2:
+        send_clicked = st.button("✈️", key="send_button", help="Send message", use_container_width=True)
+
+    st.markdown('''
+    </div>
+    <script>
+        const chatBox = document.querySelector('.chat-container');
+        if (chatBox) chatBox.scrollTop = chatBox.scrollHeight;
+    </script>
+    ''', unsafe_allow_html=True)
+
+    if (user_input and st.session_state.get("last_input") != user_input) or send_clicked:
+        if user_input.strip():
+            st.session_state.last_input = user_input
+            st.session_state.user_input = user_input.strip()
+            submit_message()
+
+    # Sidebar utilities
     if st.sidebar.button("🧹 Clear Chat"):
         st.session_state.chat_history = []
         st.sidebar.success("Chat cleared.")
-
-
-
-
-
-
-
-
-
-
