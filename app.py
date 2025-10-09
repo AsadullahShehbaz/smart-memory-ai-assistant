@@ -212,7 +212,8 @@ if "user_email" in st.session_state:
         st.markdown(f"**🤖 AI:** {chat['ai']}")
         st.markdown("---")
 
-    user_input = st.text_input("✏️ Your message:", key="message_input")
+    user_query = st.text_area("Your message:", key="message_input", height=100)
+
 
     def submit_message(user_query: str):
         user_query = user_query.strip()
@@ -294,4 +295,5 @@ if "user_email" in st.session_state:
                 st.sidebar.error(f"Error clearing memory: {e}")
         else:
             st.sidebar.info("Memory not initialized.")
+
 
