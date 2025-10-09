@@ -27,7 +27,7 @@ QDRANT_API_KEY = st.secrets["QDRANT_API_KEY"]
 QDRANT_URL = st.secrets["QDRANT_URL"]
 
 
-NEO4J_URL = st.secrets["NEO4J_URI"]
+NEO4J_URI = st.secrets["NEO4J_URI"]
 NEO4J_USERNAME = st.secrets["NEO4J_USERNAME"]
 NEO4J_PASSWORD = st.secrets["NEO4J_PASSWORD"]
 
@@ -73,7 +73,7 @@ config = {
     "graph_store":{
         "provider":"neo4j",
         "config":{ 
-            "url" : NEO4J_URL , 
+            "url" : NEO4J_URI , 
             "username" : NEO4J_USERNAME , 
             "password" : NEO4J_PASSWORD
             }
