@@ -9,3 +9,5 @@ protobuf==5.29.5
 requests==2.32.5
 pydantic==2.11.9
 typing_extensions==4.15.0
+langchain-neo4j==0.5.0
+
