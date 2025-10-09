@@ -27,7 +27,7 @@ QDRANT_API_KEY = st.secrets["QDRANT_API_KEY"]
 QDRANT_URL = st.secrets["QDRANT_URL"]
 
 
-NEO4J_URL = st.secrets["NEO4J_URL"]
+NEO4J_URL = st.secrets["NEO4J_URI"]
 NEO4J_USERNAME = st.secrets["NEO4J_USERNAME"]
 NEO4J_PASSWORD = st.secrets["NEO4J_PASSWORD"]
 
