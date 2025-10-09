@@ -1,7 +1,7 @@
 # app.py
 # 🚀 Smart Memory AI Agent
 # Streamlit + Gemini + Mem0 + Qdrant + MySQL Auth + Persistent Memory
-# Clean Version (No Custom CSS for Input Section)
+# Clean, working version (2025 update)
 
 import streamlit as st
 from dotenv import load_dotenv
@@ -13,7 +13,6 @@ import bcrypt
 import os
 import json
 import warnings
-from pathlib import Path
 
 # -----------------------------
 # Basic Config
@@ -21,36 +20,51 @@ from pathlib import Path
 warnings.filterwarnings("ignore", category=ImportWarning)
 load_dotenv()
 
-# Get secrets
-GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
-QDRANT_API_KEY = st.secrets["QDRANT_API_KEY"]
-QDRANT_URL = st.secrets["QDRANT_URL"]
-NEO4J_URI = st.secrets["NEO4J_URI"]
-NEO4J_USERNAME = st.secrets["NEO4J_USERNAME"]
-NEO4J_PASSWORD = st.secrets["NEO4J_PASSWORD"]
+# ✅ Load Secrets Safely
+def get_secret(key, default=None):
+    return (
+        st.secrets[key]
+        if key in st.secrets
+        else os.getenv(key, default)
+    )
 
-# MySQL Connection
-conn = mysql.connector.connect(
-    host=st.secrets["MYSQL_HOST"],
-    port=st.secrets["MYSQL_PORT"],
-    user=st.secrets["MYSQL_USER"],
-    password=st.secrets["MYSQL_PASSWORD"],
-    database=st.secrets["MYSQL_DB"]
-)
-cursor = conn.cursor(dictionary=True)
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS users (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-)
-""")
-conn.commit()
+GEMINI_API_KEY = get_secret("GEMINI_API_KEY")
+QDRANT_API_KEY = get_secret("QDRANT_API_KEY")
+QDRANT_URL = get_secret("QDRANT_URL", "http://localhost:6333")
+NEO4J_URI = get_secret("NEO4J_URI")
+NEO4J_USERNAME = get_secret("NEO4J_USERNAME")
+NEO4J_PASSWORD = get_secret("NEO4J_PASSWORD")
 
-# -----------------------------
-# Qdrant + Gemini Config
-# -----------------------------
+MYSQL_HOST = get_secret("MYSQL_HOST", "localhost")
+MYSQL_PORT = int(get_secret("MYSQL_PORT", 3306))
+MYSQL_USER = get_secret("MYSQL_USER", "root")
+MYSQL_PASSWORD = get_secret("MYSQL_PASSWORD", "")
+MYSQL_DB = get_secret("MYSQL_DB", "smart_ai_db")
+
+# ✅ MySQL Setup
+try:
+    conn = mysql.connector.connect(
+        host=MYSQL_HOST,
+        port=MYSQL_PORT,
+        user=MYSQL_USER,
+        password=MYSQL_PASSWORD,
+        database=MYSQL_DB
+    )
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+    conn.commit()
+except Exception as e:
+    st.error(f"MySQL connection error: {e}")
+    st.stop()
+
+# ✅ Qdrant Client
 qdrant_client = QdrantClient(
     url=QDRANT_URL,
     api_key=QDRANT_API_KEY,
@@ -58,12 +72,19 @@ qdrant_client = QdrantClient(
     prefer_grpc=False
 )
 
-genai_client = genai.Client(api_key=GEMINI_API_KEY)
+# ✅ Gemini Config
+if not GEMINI_API_KEY:
+    st.error("❌ GOOGLE_API_KEY not found in secrets or .env")
+    st.stop()
 
+genai.configure(api_key=GEMINI_API_KEY)
+model = genai.GenerativeModel("gemini-1.5-flash")
+
+# ✅ Mem0 Config
 config = {
     "version": "v1.1",
     "embedder": {"provider": "gemini", "config": {"model": "models/text-embedding-004"}},
-    "llm": {"provider": "gemini", "config": {"api_key": GEMINI_API_KEY, "model": "models/gemini-2.5-flash"}},
+    "llm": {"provider": "gemini", "config": {"api_key": GEMINI_API_KEY, "model": "models/gemini-1.5-flash"}},
     "graph_store": {
         "provider": "neo4j",
         "config": {
@@ -108,36 +129,24 @@ def authenticate_user(email, password):
         return user["email"]
     return None
 
-
 # -----------------------------
 # Streamlit Layout
 # -----------------------------
-st.set_page_config(page_title="Smart Memory AI Agent", page_icon="🤖", layout="wide")
-
-# Basic Theme
-st.markdown("""
-<style>
-body, .stApp {
-    background-color: #0F111A;
-    color: #E0E0E0;
-}
-footer {visibility: hidden;}
-</style>
-""", unsafe_allow_html=True)
+st.set_page_config(page_title="Smart Memory AI Agent", page_icon="🧠", layout="wide")
 
 # -----------------------------
 # Header
 # -----------------------------
 st.title("🧠 Smart Memory AI Agent")
 st.markdown("""
-**Powered by Gemini + Mem0 + Qdrant DB + MySQL + Neo4j Graph DB**  
+**Powered by Gemini + Mem0 + Qdrant + MySQL + Neo4j**  
 💬 Personalized Memory | ⚡ Persistent AI | ☁️ Cloud-Ready
 """)
 
 # -----------------------------
 # Sidebar Auth System
 # -----------------------------
-st.sidebar.markdown("🤖 **Welcome to Smart Memory AI Agent**")
+st.sidebar.markdown("### 🔐 Authentication")
 
 if "user_email" not in st.session_state:
     option = st.sidebar.radio("Choose an option:", ["Login", "Register"])
@@ -167,12 +176,12 @@ if "user_email" not in st.session_state:
                 st.sidebar.error("Invalid email or password")
 
 else:
-    st.sidebar.markdown(f"👋 **Logged in as {st.session_state.user_email}**")
-    st.sidebar.success("Session Active ✅")
+    st.sidebar.markdown(f"👋 **Logged in as:** `{st.session_state.user_email}`")
+    st.sidebar.success("✅ Session Active")
     if st.sidebar.button("Logout"):
         for key in ["user_email", "chat_history"]:
             st.session_state.pop(key, None)
-        st.sidebar.info("Logged out successfully!")
+        st.sidebar.info("Logged out successfully.")
         st.rerun()
 
 # -----------------------------
@@ -184,51 +193,72 @@ if "user_email" in st.session_state:
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
 
-    # Display chat history
-    st.write("### 💬 Chat History")
+    st.subheader("💬 Chat History")
     for chat in st.session_state.chat_history:
-        st.markdown(f"**You:** {chat['user']}")
-        st.markdown(f"**AI:** {chat['ai']}")
+        st.markdown(f"**🧑 You:** {chat['user']}")
+        st.markdown(f"**🤖 AI:** {chat['ai']}")
         st.markdown("---")
 
-    # Message handler
+    # -----------------------------
+    # Chat Handler Function
+    # -----------------------------
     def submit_message():
         user_query = st.session_state.user_input.strip()
         if not user_query:
             return
 
+        # 🔍 Retrieve relevant memories
         search_memory = mem_client.search(query=user_query, user_id=user_id)
-        memories = [f"Memory: {mem.get('memory')}" for mem in search_memory.get('results', [])]
-        system_prompt = f"""
-        You are a helpful AI Assistant.
-        User context (from previous chats):
-        {json.dumps(memories, indent=2)}
-        User message: {user_query}
-        """
-        response = genai_client.models.generate_content(model="gemini-2.5-flash", contents=system_prompt)
-        ai_response = response.text
+        memories = [
+            f"Memory: {mem.get('memory', '')}"
+            for mem in search_memory.get('results', [])
+        ]
+        context_text = "\n".join(memories)
 
+        # 🧠 Combine prompt
+        prompt = f"""
+        You are a helpful AI assistant with memory.
+        Previous context:
+        {context_text}
+        User says: {user_query}
+        """
+
+        # 🚀 Generate Gemini response
+        try:
+            response = model.generate_content(prompt)
+            ai_response = response.text if hasattr(response, "text") else "I generated a reply but couldn't extract text."
+        except Exception as e:
+            ai_response = f"⚠️ Gemini Error: {e}"
+
+        # 💾 Store in memory
         mem_client.add(user_id=user_id, messages=[
             {"role": "user", "content": user_query},
             {"role": "assistant", "content": ai_response},
         ])
 
+        # 🧠 Update chat
         st.session_state.chat_history.append({"user": user_query, "ai": ai_response})
         st.session_state.user_input = ""
 
     # -----------------------------
-    # Simple Input + Send Button
+    # Input Box + Button
     # -----------------------------
-    st.write("### ✍️ Type your message")
-    user_input = st.text_input("Your message:", key="user_input")
+    user_input = st.text_input("✏️ Your message:", key="user_input")
 
-    if st.button("Send"):
+    if st.button("Send ✈️"):
         if user_input.strip():
             submit_message()
+            st.rerun()
         else:
             st.warning("Please enter a message before sending.")
 
-    # Sidebar utility
+    # -----------------------------
+    # Sidebar Utilities
+    # -----------------------------
     if st.sidebar.button("🧹 Clear Chat"):
         st.session_state.chat_history = []
         st.sidebar.success("Chat cleared.")
+
+    if st.sidebar.button("🧠 Reset Memory"):
+        mem_client.delete_all(user_id=user_id)
+        st.sidebar.warning("Memory cleared for this user.")
