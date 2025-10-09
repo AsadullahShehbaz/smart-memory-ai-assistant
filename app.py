@@ -1,7 +1,7 @@
 # app.py
 # 🚀 Smart Memory AI Agent
 # Streamlit + Gemini + Mem0 + Qdrant + MySQL Auth + Persistent Memory
-# ChatGPT-style interface with bottom input box + Send ✈️ button
+# Clean Version (No Custom CSS for Input Section)
 
 import streamlit as st
 from dotenv import load_dotenv
@@ -114,108 +114,14 @@ def authenticate_user(email, password):
 # -----------------------------
 st.set_page_config(page_title="Smart Memory AI Agent", page_icon="🤖", layout="wide")
 
-# -----------------------------
-# Custom ChatGPT-style CSS
-# -----------------------------
+# Basic Theme
 st.markdown("""
 <style>
 body, .stApp {
     background-color: #0F111A;
     color: #E0E0E0;
-    margin: 0;
-    padding: 0;
-    overflow-x: hidden;
 }
 footer {visibility: hidden;}
-
-/* Scrollable chat container */
-.chat-container {
-    max-height: calc(100vh - 160px);
-    overflow-y: auto;
-    padding: 20px 10px 80px 10px;
-}
-
-/* Chat bubbles */
-.user-msg {
-    background: linear-gradient(135deg,#3B82F6,#2563EB);
-    color:white;
-    padding:12px 14px;
-    border-radius:15px;
-    margin:5px 0;
-    max-width:70%;
-    float:right;
-    clear:both;
-    word-wrap:break-word;
-}
-.ai-msg {
-    background: linear-gradient(135deg,#FBBF24,#F59E0B);
-    color:black;
-    padding:12px 14px;
-    border-radius:15px;
-    margin:5px 0;
-    max-width:70%;
-    float:left;
-    clear:both;
-    word-wrap:break-word;
-}
-
-/* Bottom input bar */
-.input-container {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    background-color: #1F2937;
-    padding: 12px 18px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    box-shadow: 0 -3px 10px rgba(0,0,0,0.3);
-    gap: 10px;
-}
-
-/* Textarea */
-textarea {
-    background-color:#374151 !important;
-    color:#E0E0E0 !important;
-    border-radius:10px !important;
-    border:none !important;
-    width:100% !important;
-    resize:none !important;
-    font-size:16px !important;
-    line-height:1.5 !important;
-    min-height:40px !important;
-    max-height:120px !important;
-    overflow-y:auto !important;
-    padding:10px 14px !important;
-}
-.stTextArea>div>div>textarea:focus {
-    outline:none !important;
-    border:none !important;
-    box-shadow:none !important;
-}
-
-/* Send button */
-.send-btn {
-    background: linear-gradient(135deg,#3B82F6,#2563EB);
-    color:white;
-    border:none;
-    border-radius:10px;
-    padding:10px 16px;
-    font-size:18px;
-    cursor:pointer;
-    transition: all 0.2s ease-in-out;
-}
-.send-btn:hover {
-    background: linear-gradient(135deg,#2563EB,#1D4ED8);
-    transform: translateY(-1px);
-}
-
-/* Responsive tweaks */
-@media (max-width: 768px) {
-    .user-msg, .ai-msg {max-width: 90%;}
-    .input-container {padding: 10px;}
-}
 </style>
 """, unsafe_allow_html=True)
 
@@ -279,19 +185,18 @@ if "user_email" in st.session_state:
         st.session_state.chat_history = []
 
     # Display chat history
-    chat_container = st.container()
-    with chat_container:
-        st.markdown('<div class="chat-container">', unsafe_allow_html=True)
-        for chat in st.session_state.chat_history:
-            st.markdown(f'<div class="user-msg"><b>You:</b> {chat["user"]}</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="ai-msg"><b>AI:</b> {chat["ai"]}</div>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+    st.write("### 💬 Chat History")
+    for chat in st.session_state.chat_history:
+        st.markdown(f"**You:** {chat['user']}")
+        st.markdown(f"**AI:** {chat['ai']}")
+        st.markdown("---")
 
     # Message handler
     def submit_message():
         user_query = st.session_state.user_input.strip()
         if not user_query:
             return
+
         search_memory = mem_client.search(query=user_query, user_id=user_id)
         memories = [f"Memory: {mem.get('memory')}" for mem in search_memory.get('results', [])]
         system_prompt = f"""
@@ -312,38 +217,18 @@ if "user_email" in st.session_state:
         st.session_state.user_input = ""
 
     # -----------------------------
-    # Bottom Input + Send ✈️ Button
+    # Simple Input + Send Button
     # -----------------------------
-    st.markdown('<div class="input-container">', unsafe_allow_html=True)
-    col1, col2 = st.columns([9, 1])
+    st.write("### ✍️ Type your message")
+    user_input = st.text_input("Your message:", key="user_input")
 
-    with col1:
-        user_input = st.text_area(
-            "",
-            key="user_input",
-            placeholder="Type your message... (Shift+Enter for new line)",
-            height=40,
-        )
-
-    with col2:
-        send_clicked = st.button("✈️", key="send_button", help="Send message", use_container_width=True)
-
-    st.markdown('''
-    </div>
-    <script>
-        const chatBox = document.querySelector('.chat-container');
-        if (chatBox) chatBox.scrollTop = chatBox.scrollHeight;
-    </script>
-    ''', unsafe_allow_html=True)
-
-    if (user_input.strip() and st.session_state.get("last_input") != user_input.strip()) or send_clicked:
+    if st.button("Send"):
         if user_input.strip():
-            st.session_state.last_input = user_input.strip()
-            st.session_state.user_input_area = user_input.strip()  # update text area key
             submit_message()
+        else:
+            st.warning("Please enter a message before sending.")
 
-    # Sidebar utilities
+    # Sidebar utility
     if st.sidebar.button("🧹 Clear Chat"):
         st.session_state.chat_history = []
         st.sidebar.success("Chat cleared.")
-
