@@ -6,7 +6,7 @@
 import streamlit as st
 from dotenv import load_dotenv
 from mem0 import Memory
-from google import genai
+import google.generativeai as genai
 from qdrant_client import QdrantClient
 import mysql.connector
 import bcrypt
@@ -63,13 +63,26 @@ qdrant_client = QdrantClient(
     timeout=30.0,
     prefer_grpc=False
 )
+genai.configure(api_key=GEMINI_API_KEY)
 
-genai_client = genai.Client(api_key=GEMINI_API_KEY)
+# Create the model
+genai_client = genai.GenerativeModel(model_name="gemini-2.0-flash")
+
 
 config = {
     "version": "v1.1",
-    "embedder": {"provider": "gemini", "config": {"model": "models/text-embedding-004"}},
-    "llm": {"provider": "gemini", "config": {"api_key": GEMINI_API_KEY, "model": "models/gemini-2.5-flash"}},
+    "embedder": {
+        "provider": "gemini",
+        "config": {"model": "models/text-embedding-004"
+                  }
+    },
+    "llm": {
+        "provider": "gemini", 
+        "config": {
+            "api_key": GEMINI_API_KEY, 
+            "model": "models/gemini-2.0-flash"
+        }
+    },
     "graph_store":{
         "provider":"neo4j",
         "config":{ 
@@ -135,8 +148,8 @@ st.markdown(
 st.title("🧠 Smart Memory AI Agent")
 st.markdown(
     """
-    **Powered by Gemini + Mem0 + Qdrant + MySQL**  
-    💬 Personalized Memory | ⚡ Persistent AI | ☁️ Cloud-Ready
+    **Powered by Gemini + Mem0 + Qdrant + MySQL + Neo4j**  
+    💬 Personalized Memory | ⚡ Persistent AI | ☁️ Cloud-Ready 
     """,
     unsafe_allow_html=True
 )
@@ -218,7 +231,7 @@ if "user_email" in st.session_state:
         """
 
         response = genai_client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-2.0-flash",
             contents=system_prompt
         )
         ai_response = response.text
@@ -250,3 +263,4 @@ if "user_email" in st.session_state:
     if st.sidebar.button("📁 Download Memory"):
         mem_client.download(user_id=user_id)
         st.sidebar.success("Memory downloaded successfully!")
+
