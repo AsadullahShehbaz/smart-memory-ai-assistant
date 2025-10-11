@@ -1,5 +1,11 @@
 streamlit==1.49.1
-google-genai==1.41.0
+google-ai-generativelanguage==0.6.15
+google-api-core==2.25.1
+google-api-python-client==2.184.0
+google-auth==2.40.3
+google-auth-httplib2==0.2.0
+google-generativeai==0.8.5
+googleapis-common-protos==1.70.0
 mem0ai==0.1.117
 qdrant-client==1.15.1
 mysql-connector-python==9.4.0
@@ -11,4 +17,5 @@ pydantic==2.11.9
 typing_extensions==4.15.0
 langchain-neo4j==0.5.0
 rank-bm25==0.2.2
+
 
