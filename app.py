@@ -6,7 +6,8 @@
 import streamlit as st
 from dotenv import load_dotenv
 from mem0 import Memory
-import google.generativeai as genai
+from google import genai
+
 from qdrant_client import QdrantClient
 import mysql.connector
 import bcrypt
@@ -263,4 +264,5 @@ if "user_email" in st.session_state:
     if st.sidebar.button("📁 Download Memory"):
         mem_client.download(user_id=user_id)
         st.sidebar.success("Memory downloaded successfully!")
+
 
